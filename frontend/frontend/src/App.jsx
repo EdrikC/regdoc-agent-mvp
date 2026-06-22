@@ -52,6 +52,22 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatCurrentDate() {
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone: "America/New_York",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).formatToParts(new Date());
+
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+
+  return `${getPart("weekday")} · ${getPart("month")} ${getPart("day")} ${getPart(
+    "year"
+  )}`.toUpperCase();
+}
+
 function createTrace(steps, status = "pending") {
   return steps.map((step) => ({ ...step, status }));
 }
@@ -62,18 +78,18 @@ function completeReturnedTrace(trace = []) {
 
 function statusClasses(status) {
   if (status === "complete") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
+    return "border-cyan-300 bg-cyan-50/80 text-cyan-800";
   }
 
   if (status === "running") {
-    return "active-step border-blue-300 bg-blue-50 text-blue-800";
+    return "border-cyan-400 bg-white text-cyan-900 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_20px_60px_rgba(8,145,178,0.12)]";
   }
 
   if (status === "error") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-rose-300 bg-rose-50 text-rose-800";
   }
 
-  return "border-slate-200 bg-white text-slate-500";
+  return "border-slate-200 bg-white/70 text-slate-500";
 }
 
 function App() {
@@ -86,9 +102,7 @@ function App() {
   const activeStepIndex = agentTrace.findIndex((step) => step.status === "running");
   const completedSteps = agentTrace.filter((step) => step.status === "complete").length;
   const progress =
-    agentTrace.length > 0
-      ? Math.round((completedSteps / agentTrace.length) * 100)
-      : 0;
+    agentTrace.length > 0 ? Math.round((completedSteps / agentTrace.length) * 100) : 0;
 
   async function checkBackend() {
     const res = await fetch(`${API_URL}/health`);
@@ -142,6 +156,7 @@ function App() {
         error: true,
         message: err.message,
       });
+
       setAgentTrace((currentTrace) =>
         currentTrace.map((step) =>
           step.status === "running" ? { ...step, status: "error" } : step
@@ -154,249 +169,314 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen bg-sky-50 text-slate-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-6 rounded-lg border border-sky-100 bg-white px-5 py-5 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <main className="min-h-screen overflow-hidden bg-[#f3fbff] text-slate-950">
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(to_right,rgba(15,118,110,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,118,110,0.07)_1px,transparent_1px)] bg-[size:32px_32px]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(34,211,238,0.20),transparent_28%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_35%)]" />
+
+      <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8">
+        <header className="border-b border-cyan-500/40 pb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                FastAPI · Strands · eSTAR draft
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
-                RegDoc Agent MVP
+              <h1 className="font-mono text-4xl font-black uppercase tracking-tighter text-slate-950 md:text-5xl">
+                REGDOC AGENT{" "}
+                <span className="text-cyan-700">/ ESTAR DRAFT</span>
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Upload a regulatory PDF, extract the key fields, review the document,
-                and generate a downloadable draft packet.
-              </p>
+            </div>
+
+            <div className="flex items-center gap-4 font-mono text-[11px] uppercase tracking-[0.26em] text-slate-500">
+              <span
+                className={`inline-flex items-center rounded-md border px-3 py-1 ${
+                  health
+                    ? "border-cyan-300 bg-cyan-50 text-cyan-700"
+                    : "border-slate-300 bg-white/70"
+                }`}
+              >
+                <span
+                  className={`mr-2 h-1.5 w-1.5 rounded-full ${
+                    health ? "bg-cyan-500" : "bg-slate-400"
+                  }`}
+                />
+                {health ? "On Air" : "Offline"}
+              </span>
+
+              <span>{formatCurrentDate()}</span>
+              <span>Eastern Time</span>
+            </div>
+          </div>
+        </header>
+
+        <section className="grid flex-1 gap-10 py-10 lg:grid-cols-[330px_1fr]">
+          <aside className="self-start rounded-xl border border-slate-200 bg-white/80 p-5 shadow-[0_24px_80px_rgba(8,145,178,0.16)] backdrop-blur">
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-cyan-200 bg-cyan-50">
+                <div className="absolute h-12 w-12 rounded-full border border-cyan-200" />
+                <div className="h-8 w-8 rounded-full bg-cyan-500 shadow-[0_0_24px_rgba(6,182,212,0.65)]" />
+              </div>
+
+              <div className="font-mono uppercase">
+                <p className="text-[11px] tracking-[0.26em] text-slate-400">
+                  RegDoc · Agent Line
+                </p>
+                <p className="mt-1 text-sm font-bold tracking-[0.22em] text-cyan-700">
+                  {loading ? "Processing" : result ? "Complete" : "Standing By"}
+                </p>
+              </div>
             </div>
 
             <button
               onClick={checkBackend}
-              className="inline-flex items-center justify-center rounded-md border border-sky-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-50 active:scale-[0.99]"
+              className="mt-6 w-full rounded-md border border-slate-300 bg-slate-100 px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.22em] text-slate-700 transition hover:bg-white active:scale-[0.99]"
             >
-              {health ? "Backend online" : "Check backend"}
+              {health ? "Backend Online" : "Check Backend"}
             </button>
-          </div>
-        </header>
 
-        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-lg border border-sky-100 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-950">Upload Document</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Select one PDF to start the review workflow.
-            </p>
+            <div className="mt-6 border-t border-slate-200 pt-5">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-700">
+                Upload PDF
+              </p>
 
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-sky-300 bg-sky-50 px-6 py-9 text-center transition hover:border-blue-400 hover:bg-blue-50">
-              <span className="text-sm font-semibold text-slate-900">
-                {file ? file.name : "Choose a PDF file"}
-              </span>
-              <span className="mt-1 text-xs text-slate-500">
-                {file ? `${formatFileSize(file.size)} selected` : "PDF only"}
-              </span>
-              <input
-                className="hidden"
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => setFile(event.target.files[0])}
-              />
-            </label>
-
-            <button
-              disabled={!file || loading}
-              onClick={uploadFile}
-              className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                  Processing document
+              <label className="mt-4 block cursor-pointer rounded-md border border-dashed border-cyan-300 bg-cyan-50/60 p-4 transition hover:bg-cyan-50">
+                <span className="block truncate font-mono text-xs font-bold uppercase tracking-[0.16em] text-slate-800">
+                  {file ? file.name : "Choose file"}
                 </span>
-              ) : (
-                "Upload PDF"
-              )}
-            </button>
+                <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  {file ? `${formatFileSize(file.size)} selected` : "PDF only"}
+                </span>
+
+                <input
+                  className="hidden"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(event) => setFile(event.target.files[0])}
+                />
+              </label>
+
+              <button
+                disabled={!file || loading}
+                onClick={uploadFile}
+                className="mt-4 w-full rounded-md bg-cyan-700 px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.2em] text-white transition hover:bg-cyan-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {loading ? "Running Agents..." : "Start Review"}
+              </button>
+            </div>
+
+            <div className="mt-6 border-t border-slate-200 pt-5">
+              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                Agent Message
+              </p>
+              <p className="mt-3 font-mono text-xs leading-5 text-slate-700">
+                Hey, this is your regulatory document workflow. Upload one PDF and I’ll
+                extract the relevant fields, run the agent handoff, and generate a
+                draft packet.
+              </p>
+            </div>
 
             {health && (
-              <div className="mt-4 rounded-md border border-sky-100 bg-sky-50 p-3 text-left text-xs text-sky-800">
-                Backend status: {health.status}
+              <div className="mt-5 rounded-md border border-cyan-200 bg-cyan-50 p-3 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan-800">
+                Health: {health.status}
               </div>
             )}
-          </div>
+          </aside>
 
-          <div className="rounded-lg border border-sky-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
+          <section className="min-w-0">
+            <div className="mb-8 grid grid-cols-[42px_1fr] gap-5">
+              <div className="font-mono text-xs font-bold text-cyan-700">01</div>
               <div>
-                <h2 className="text-base font-semibold text-slate-950">
+                <h2 className="font-mono text-2xl font-black uppercase tracking-[0.12em] text-slate-950">
                   Workflow
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Sequential progress while the backend processes the document.
-                </p>
-              </div>
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                {loading
-                  ? activeStepIndex >= 0
-                    ? `Step ${activeStepIndex + 1} of ${workflowSteps.length}`
-                    : "Starting"
-                  : result?.error
-                    ? "Stopped"
-                    : agentTrace.length > 0
-                      ? "Complete"
-                      : "Idle"}
-              </span>
-            </div>
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {(agentTrace.length > 0 ? agentTrace : createTrace(workflowSteps)).map(
-                (step, index) => (
-                  <div
-                    key={`${step.agent}-${index}`}
-                    className={`rounded-lg border p-4 transition ${statusClasses(
-                      step.status
-                    )}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current text-xs font-semibold">
-                        {step.status === "complete" ? "OK" : index + 1}
-                      </div>
-
-                      <div className="min-w-0 flex-1 text-left">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-sm font-semibold">{step.agent}</h3>
-                          <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium capitalize">
-                            {step.status}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-600">
-                          {step.input} to {step.output}
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {(agentTrace.length > 0 ? agentTrace : createTrace(workflowSteps)).map(
+                    (step, index) => (
+                      <div
+                        key={`${step.agent}-${index}`}
+                        className={`min-h-[122px] rounded-lg border p-4 transition ${statusClasses(
+                          step.status
+                        )}`}
+                      >
+                        <p className="font-mono text-3xl font-black leading-none tracking-tight">
+                          {String(index + 1).padStart(2, "0")}
+                        </p>
+                        <p className="mt-4 font-mono text-xs font-bold uppercase tracking-[0.18em]">
+                          {step.agent}
+                        </p>
+                        <p className="mt-3 text-xs leading-5 text-slate-500">
+                          {step.output}
                         </p>
                       </div>
-                    </div>
-                  </div>
-                )
-              )}
+                    )
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
 
-        {result && (
-          <section className="mt-4 rounded-lg border border-sky-100 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="mb-8 grid grid-cols-[42px_1fr] gap-5">
+              <div className="font-mono text-xs font-bold text-slate-300">02</div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">
-                  Document Review
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Saved JSON state, extracted fields, and generated draft details.
-                </p>
-              </div>
-
-              <span
-                className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                  result.error
-                    ? "bg-rose-50 text-rose-700"
-                    : "bg-sky-50 text-sky-700"
-                }`}
-              >
-                {result.error ? "Error" : result.status}
-              </span>
-            </div>
-
-            {result.error && (
-              <div className="mt-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                {result.message}
-              </div>
-            )}
-
-            {!result.error && (
-              <>
-                <div className="mt-5 grid gap-3 md:grid-cols-4">
-                  <InfoCard label="Filename" value={result.filename || "Unknown"} />
-                  <InfoCard label="Uploaded" value={formatDate(result.created_at)} />
-                  <InfoCard label="File size" value={formatFileSize(result.size_bytes)} />
-                  <InfoCard
-                    label="Completion"
-                    value={`${result.review?.completion_score ?? 0}%`}
-                  />
+                <div className="flex items-center justify-between border-t border-slate-200 pt-5">
+                  <h2 className="font-mono text-lg font-black uppercase tracking-[0.14em] text-slate-400">
+                    Progress
+                  </h2>
+                  <span className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">
+                    {progress}%
+                  </span>
                 </div>
 
-                {result.download_url && (
-                  <a
-                    href={`${API_URL}${result.download_url}`}
-                    download
-                    className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99] md:w-auto"
-                  >
-                    Download eSTAR Draft PDF
-                  </a>
-                )}
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-cyan-600 transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
 
-                {result.review?.summary && (
-                  <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50 p-4 text-left">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-950">
-                        Agent Summary
-                      </h3>
-                      {result.review.confidence && (
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium capitalize text-sky-700">
-                          {result.review.confidence} confidence
-                        </span>
-                      )}
+            {result && (
+              <div className="grid grid-cols-[42px_1fr] gap-5">
+                <div className="font-mono text-xs font-bold text-slate-300">03</div>
+
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-6 shadow-[0_24px_80px_rgba(8,145,178,0.10)] backdrop-blur">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h2 className="font-mono text-2xl font-black uppercase tracking-[0.12em] text-slate-950">
+                        Details
+                      </h2>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Extracted fields, agent findings, and generated draft output.
+                      </p>
                     </div>
-                    <p className="text-sm leading-6 text-slate-700">
-                      {result.review.summary}
-                    </p>
-                  </div>
-                )}
 
-                {result.review?.fields && (
-                  <div className="mt-5 rounded-lg border border-slate-200 bg-white p-4 text-left">
-                    <h3 className="text-sm font-semibold text-slate-950">
-                      Extracted Fields
-                    </h3>
-                    <div className="mt-3 divide-y divide-slate-100">
-                      {Object.entries(result.review.fields).map(([key, value]) => (
-                        <div
-                          key={key}
-                          className="grid gap-2 py-3 sm:grid-cols-[180px_1fr]"
+                    <span
+                      className={`inline-flex rounded-md border px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.18em] ${
+                        result.error
+                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                      }`}
+                    >
+                      {result.error ? "Error" : result.status}
+                    </span>
+                  </div>
+
+                  {result.error && (
+                    <div className="mt-6 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                      {result.message}
+                    </div>
+                  )}
+
+                  {!result.error && (
+                    <>
+                      <div className="mt-6 grid gap-3 md:grid-cols-4">
+                        <InfoCard label="Filename" value={result.filename || "Unknown"} />
+                        <InfoCard label="Uploaded" value={formatDate(result.created_at)} />
+                        <InfoCard label="File size" value={formatFileSize(result.size_bytes)} />
+                        <InfoCard
+                          label="Completion"
+                          value={`${result.review?.completion_score ?? 0}%`}
+                        />
+                      </div>
+
+                      {result.download_url && (
+                        <a
+                          href={`${API_URL}${result.download_url}`}
+                          download
+                          className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-slate-950 px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.18em] text-white transition hover:bg-cyan-700 active:scale-[0.99] md:w-auto"
                         >
-                          <span className="text-sm font-medium text-slate-500">
-                            {fieldLabels[key] || key.replaceAll("_", " ")}
-                          </span>
-                          <span
-                            className={`text-sm ${
-                              value ? "text-slate-900" : "text-rose-700"
-                            }`}
-                          >
-                            {value || "Missing"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                          Download eSTAR Draft PDF
+                        </a>
+                      )}
 
-                {result.text_preview && (
-                  <details className="mt-5 rounded-lg border border-slate-200 bg-white p-4 text-left">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-950">
-                      Text Preview
-                    </summary>
-                    <pre className="mt-3 max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-                      {result.text_preview}
-                    </pre>
-                  </details>
-                )}
-              </>
+                      {result.review?.summary && (
+                        <div className="mt-6 rounded-lg border border-cyan-100 bg-cyan-50/70 p-5">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
+                              Agent Summary
+                            </h3>
+                            {result.review.confidence && (
+                              <span className="rounded-md bg-white px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-700">
+                                {result.review.confidence} Confidence
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm leading-6 text-slate-700">
+                            {result.review.summary}
+                          </p>
+                        </div>
+                      )}
+
+                      {result.review?.fields && (
+                        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+                          <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
+                            Extracted Fields
+                          </h3>
+
+                          <div className="mt-4 divide-y divide-slate-100">
+                            {Object.entries(result.review.fields).map(([key, value]) => (
+                              <div
+                                key={key}
+                                className="grid gap-2 py-3 sm:grid-cols-[190px_1fr]"
+                              >
+                                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                  {fieldLabels[key] || key.replaceAll("_", " ")}
+                                </span>
+                                <span
+                                  className={`text-sm ${
+                                    value ? "text-slate-900" : "text-rose-700"
+                                  }`}
+                                >
+                                  {value || "Missing"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {result.estar_draft?.sections && (
+                        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+                          <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
+                            eSTAR Draft Sections
+                          </h3>
+
+                          <div className="mt-4 space-y-5">
+                            {result.estar_draft.sections.map((section) => (
+                              <div
+                                key={section.section_title}
+                                className="border-b border-slate-100 pb-5 last:border-b-0 last:pb-0"
+                              >
+                                <h4 className="font-mono text-xs font-black uppercase tracking-[0.18em] text-cyan-700">
+                                  {section.section_title}
+                                </h4>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">
+                                  {section.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {result.text_preview && (
+                        <details className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+                          <summary className="cursor-pointer font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
+                            Text Preview
+                          </summary>
+                          <pre className="mt-4 max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md bg-slate-50 p-4 font-mono text-xs leading-5 text-slate-600">
+                            {result.text_preview}
+                          </pre>
+                        </details>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             )}
           </section>
-        )}
+        </section>
+
+        <footer className="border-t border-cyan-500/30 py-4 font-mono text-[11px] uppercase tracking-[0.26em] text-slate-400">
+          Processed via FastAPI · Strands Agents · eSTAR-style PDF writer
+        </footer>
       </div>
     </main>
   );
@@ -404,8 +484,10 @@ function App() {
 
 function InfoCard({ label, value }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 text-left">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded-lg border border-slate-200 bg-white/80 p-4">
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+        {label}
+      </p>
       <p className="mt-2 break-words text-sm font-semibold text-slate-950">
         {value}
       </p>
