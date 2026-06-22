@@ -2,14 +2,6 @@ import { useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-const fieldLabels = {
-  device_name: "Device Name",
-  manufacturer: "Manufacturer",
-  intended_use: "Intended Use",
-  risk_class: "Risk Class",
-  predicate_device: "Predicate Device",
-};
-
 const workflowSteps = [
   {
     agent: "Upload",
@@ -22,18 +14,23 @@ const workflowSteps = [
     output: "Extracted document text",
   },
   {
-    agent: "DocReviewAgent",
+    agent: "ExtractionAgent",
     input: "Extracted PDF text",
-    output: "Structured regulatory review JSON",
+    output: "Structured 510(k) profile JSON",
+  },
+  {
+    agent: "ReadinessReviewerAgent",
+    input: "Structured 510(k) profile JSON",
+    output: "Readiness score, strengths, risks, and next steps",
   },
   {
     agent: "eSTARDraftAgent",
-    input: "DocReviewAgent output",
-    output: "eSTAR-style draft packet JSON",
+    input: "510(k) profile + readiness review",
+    output: "eSTAR-style draft packet outline JSON",
   },
   {
     agent: "PDF Writer",
-    input: "eSTAR-style draft packet JSON",
+    input: "eSTAR-style draft packet outline JSON",
     output: "Downloadable draft PDF",
   },
 ];
@@ -76,6 +73,30 @@ function completeReturnedTrace(trace = []) {
   return trace.map((step) => ({ ...step, status: "complete" }));
 }
 
+function humanizeKey(key) {
+  return key.replaceAll("_", " ");
+}
+
+function formatDisplayValue(value) {
+  if (value === null || value === undefined || value === "") return "Missing";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "None";
+  return String(value);
+}
+
+function normalizeReadinessScore(readinessReview, fallbackScore = 0) {
+  const rawScore = readinessReview?.readiness_score ?? fallbackScore;
+  const numericScore = Number(rawScore);
+
+  if (!Number.isFinite(numericScore)) return 0;
+
+  if (numericScore >= 0 && numericScore <= 10 && readinessReview?.readiness_level) {
+    return Math.round(numericScore * 10);
+  }
+
+  return Math.max(0, Math.min(100, Math.round(numericScore)));
+}
+
 function statusClasses(status) {
   if (status === "complete") {
     return "border-cyan-300 bg-cyan-50/80 text-cyan-800";
@@ -99,10 +120,22 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [agentTrace, setAgentTrace] = useState([]);
 
-  const activeStepIndex = agentTrace.findIndex((step) => step.status === "running");
   const completedSteps = agentTrace.filter((step) => step.status === "complete").length;
   const progress =
     agentTrace.length > 0 ? Math.round((completedSteps / agentTrace.length) * 100) : 0;
+  const extraction = result?.extraction || result?.review?.fields || null;
+  const readinessReview = result?.readiness_review || result?.review || null;
+  const readinessScore = normalizeReadinessScore(
+    readinessReview,
+    result?.review?.completion_score
+  );
+  const extractionSections = extraction
+    ? Object.values(extraction).some(
+        (value) => value && typeof value === "object" && !Array.isArray(value)
+      )
+      ? Object.entries(extraction)
+      : [["extracted_fields", extraction]]
+    : [];
 
   async function checkBackend() {
     const res = await fetch(`${API_URL}/health`);
@@ -149,7 +182,7 @@ function App() {
         { ...workflowSteps[0], status: "complete" },
         { ...workflowSteps[1], status: "complete" },
         ...completeReturnedTrace(data.agent_trace),
-        { ...workflowSteps[4], status: "complete" },
+        { ...workflowSteps[5], status: "complete" },
       ]);
     } catch (err) {
       setResult({
@@ -370,10 +403,7 @@ function App() {
                         <InfoCard label="Filename" value={result.filename || "Unknown"} />
                         <InfoCard label="Uploaded" value={formatDate(result.created_at)} />
                         <InfoCard label="File size" value={formatFileSize(result.size_bytes)} />
-                        <InfoCard
-                          label="Completion"
-                          value={`${result.review?.completion_score ?? 0}%`}
-                        />
+                        <InfoCard label="Readiness" value={`${readinessScore}%`} />
                       </div>
 
                       {result.download_url && (
@@ -386,49 +416,101 @@ function App() {
                         </a>
                       )}
 
-                      {result.review?.summary && (
+                      {readinessReview?.regulatory_takeaway && (
                         <div className="mt-6 rounded-lg border border-cyan-100 bg-cyan-50/70 p-5">
                           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                             <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
-                              Agent Summary
+                              Readiness Takeaway
                             </h3>
-                            {result.review.confidence && (
+                            {readinessReview.readiness_level && (
                               <span className="rounded-md bg-white px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-700">
-                                {result.review.confidence} Confidence
+                                {readinessReview.readiness_level} Readiness
                               </span>
                             )}
                           </div>
                           <p className="text-sm leading-6 text-slate-700">
-                            {result.review.summary}
+                            {readinessReview.regulatory_takeaway}
                           </p>
                         </div>
                       )}
 
-                      {result.review?.fields && (
+                      {extraction && (
                         <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
                           <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
-                            Extracted Fields
+                            510(k) Extraction
                           </h3>
 
-                          <div className="mt-4 divide-y divide-slate-100">
-                            {Object.entries(result.review.fields).map(([key, value]) => (
-                              <div
-                                key={key}
-                                className="grid gap-2 py-3 sm:grid-cols-[190px_1fr]"
-                              >
-                                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                                  {fieldLabels[key] || key.replaceAll("_", " ")}
-                                </span>
-                                <span
-                                  className={`text-sm ${
-                                    value ? "text-slate-900" : "text-rose-700"
-                                  }`}
-                                >
-                                  {value || "Missing"}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                            {extractionSections
+                              .filter(
+                                ([, value]) =>
+                                  value && typeof value === "object" && !Array.isArray(value)
+                              )
+                              .map(([sectionKey, sectionValue]) => (
+                                <DataSection
+                                  key={sectionKey}
+                                  title={humanizeKey(sectionKey)}
+                                  data={sectionValue}
+                                />
+                              ))}
                           </div>
+
+                          {extraction.missing_fields?.length > 0 && (
+                            <div className="mt-6 border-t border-slate-100 pt-5">
+                              <ListBlock
+                                title="Missing Fields"
+                                items={extraction.missing_fields}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {readinessReview && (
+                        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+                          <h3 className="font-mono text-xs font-black uppercase tracking-[0.2em] text-slate-950">
+                            Agent Readiness Review
+                          </h3>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <ListBlock title="Strengths" items={readinessReview.strengths} />
+                            <ListBlock
+                              title="Recommended Next Steps"
+                              items={readinessReview.recommended_next_steps}
+                            />
+                          </div>
+
+                          {readinessReview.gaps_or_risks?.length > 0 && (
+                            <div className="mt-5">
+                              <h4 className="font-mono text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                                Gaps or Risks
+                              </h4>
+                              <div className="mt-3 space-y-3">
+                                {readinessReview.gaps_or_risks.map((risk, index) => (
+                                  <div
+                                    key={`${risk.issue}-${index}`}
+                                    className="rounded-md border border-slate-100 bg-slate-50 p-4"
+                                  >
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="rounded bg-white px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-rose-700">
+                                        {risk.severity || "Risk"}
+                                      </span>
+                                      <h5 className="text-sm font-semibold text-slate-950">
+                                        {risk.issue}
+                                      </h5>
+                                    </div>
+                                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                                      {risk.why_it_matters}
+                                    </p>
+                                    <p className="mt-2 text-sm leading-6 text-slate-800">
+                                      <span className="font-semibold">Next step:</span>{" "}
+                                      {risk.recommended_next_step}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -491,6 +573,55 @@ function InfoCard({ label, value }) {
       <p className="mt-2 break-words text-sm font-semibold text-slate-950">
         {value}
       </p>
+    </div>
+  );
+}
+
+function DataSection({ title, data }) {
+  return (
+    <section>
+      <h4 className="font-mono text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700">
+        {title}
+      </h4>
+      <div className="mt-3 divide-y divide-slate-100">
+        {Object.entries(data).map(([key, value]) => (
+          <div key={key} className="grid gap-2 py-3 sm:grid-cols-[180px_1fr]">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              {humanizeKey(key)}
+            </span>
+            <span
+              className={`text-sm leading-6 ${
+                value === null || value === undefined || value === ""
+                  ? "text-rose-700"
+                  : "text-slate-900"
+              }`}
+            >
+              {formatDisplayValue(value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ListBlock({ title, items }) {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  return (
+    <div>
+      <h4 className="font-mono text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+        {title}
+      </h4>
+      {safeItems.length > 0 ? (
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {safeItems.map((item, index) => (
+            <li key={`${title}-${index}`}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">None reported.</p>
+      )}
     </div>
   );
 }
